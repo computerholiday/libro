@@ -30,6 +30,12 @@ def init_args() -> Dict:
     show_parser = subparsers.add_parser("show", help="Show books")
     show_parser.add_argument("--year", type=int, help="Year to filter books")
     show_parser.add_argument(
+        "--list",
+        choices=["current", "want", "finished", "all"],
+        default="all",
+        help="Which list to show (default: all)",
+    )
+    show_parser.add_argument(
         "id", type=int, nargs="?", help="Show details for a specific book ID"
     )
 
@@ -38,8 +44,32 @@ def init_args() -> Dict:
     add_parser.add_argument("--title", type=str, help="Title of the book")
     add_parser.add_argument("--author", type=str, help="Author of the book")
     add_parser.add_argument("--year", type=int, help="Year of the book")
+    add_parser.add_argument(
+        "--status",
+        choices=["currently_reading", "want_to_read", "finished"],
+        default="want_to_read",
+        help="Reading status (default: want_to_read)",
+    )
 
-    # Add command with its specific arguments
+    # Edit command with its specific arguments
+    edit_parser = subparsers.add_parser("edit", help="Edit a book's review")
+    edit_parser.add_argument(
+        "id", type=int, help="ID of the book to edit"
+    )
+
+    # Note commands
+    note_parser = subparsers.add_parser("note", help="Manage reading notes")
+    note_subparsers = note_parser.add_subparsers(dest="note_command", help="Note commands")
+    
+    # Add note command
+    add_note_parser = note_subparsers.add_parser("add", help="Add a note to a book")
+    add_note_parser.add_argument("id", type=int, help="ID of the book")
+    
+    # Show notes command
+    show_notes_parser = note_subparsers.add_parser("show", help="Show notes for a book")
+    show_notes_parser.add_argument("id", type=int, help="ID of the book")
+
+    # Import command with its specific arguments
     import_parser = subparsers.add_parser("import", help="Import books")
     import_parser.add_argument("file", type=str, help="Goodreads CSV export file")
 

@@ -5,27 +5,39 @@ from rich.table import Table
 
 
 def show_books(db, args={}):
-    # By year is default
-    # Current year is default year if not specified
-    year = args.get("year", datetime.now().year)
-
-    # if id is not none, show book detail
+    # If id is specified, show book detail
     if args.get("id") is not None:
         show_book_detail(db, args.get("id"))
         return
 
-    books = get_books(db, year)
+    # Get the list to show
+    list_type = args.get("list", "all")
+    year = args.get("year", datetime.now().year)
+
+    if list_type == "current":
+        books = get_books_by_status(db, "currently_reading")
+        title = "Currently Reading"
+    elif list_type == "want":
+        books = get_books_by_status(db, "want_to_read")
+        title = "Want to Read"
+    elif list_type == "finished":
+        books = get_books_by_year(db, year)
+        title = f"Books Read in {year}"
+    else:
+        books = get_all_books(db)
+        title = "All Books"
+
     if not books:
-        print("No books found for the specified year.")
+        print("No books found.")
         return
 
     console = Console()
-    table = Table(show_header=True, title=f"Books Read in {year}")
+    table = Table(show_header=True, title=title)
     table.add_column("id")
     table.add_column("Title")
     table.add_column("Author")
     table.add_column("Rating")
-    table.add_column("Date Read")
+    table.add_column("Date Read" if list_type == "finished" else "Status")
 
     # Sort books by genre (fiction first) and then by date
     sorted_books = sorted(
@@ -48,23 +60,26 @@ def show_books(db, args={}):
                 style="bold cyan",
             )
 
-        # Format the date
-        date_str = book["date_read"]
-        if date_str:
-            try:
-                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                formatted_date = date_obj.strftime("%b %d, %Y")
-            except ValueError:
-                formatted_date = date_str
+        # Format the date/status column
+        if list_type == "finished":
+            date_str = book["date_read"]
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                    last_column = date_obj.strftime("%b %d, %Y")
+                except ValueError:
+                    last_column = date_str
+            else:
+                last_column = ""
         else:
-            formatted_date = ""
+            last_column = book["status"].replace("_", " ").title() if book["status"] else ""
 
         table.add_row(
             str(book["id"]),
             book["title"],
             book["author"],
-            str(book["rating"]),
-            formatted_date,
+            str(book["rating"] or ""),
+            last_column,
         )
 
     console.print(table)
@@ -74,10 +89,13 @@ def show_book_detail(db, id):
     cursor = db.cursor()
     cursor.execute(
         """SELECT b.id, b.title, b.author, b.pub_year, b.pages, b.genre,
-                  r.rating, r.date_read, r.review
+                  r.rating, r.date_read, r.review, r.status,
+                  COUNT(n.id) as note_count
         FROM books b
         LEFT JOIN reviews r ON b.id = r.book_id
-        WHERE b.id = ?""",
+        LEFT JOIN reading_notes n ON b.id = n.book_id
+        WHERE b.id = ?
+        GROUP BY b.id""",
         (id,),
     )
     book = cursor.fetchone()
@@ -92,42 +110,76 @@ def show_book_detail(db, id):
     table.add_column("Value", style="green")
 
     # Map of column names to display names
-    display_names = [
-        "ID",
-        "Title",
-        "Author",
-        "Publication Year",
-        "Pages",
-        "Genre",
-        "Rating",
-        "Date Read",
-        "My Review",
+    fields = [
+        ("ID", book["id"]),
+        ("Title", book["title"]),
+        ("Author", book["author"]),
+        ("Publication Year", book["pub_year"]),
+        ("Pages", book["pages"]),
+        ("Genre", book["genre"]),
+        ("Status", book["status"].replace("_", " ").title() if book["status"] else "Not Set"),
+        ("Rating", book["rating"]),
+        ("Date Read", book["date_read"]),
+        ("Reading Notes", f"{book['note_count']} notes" if book['note_count'] > 0 else "No notes"),
+        ("My Review", book["review"] or "No review"),
     ]
 
-    for col, value in zip(range(len(display_names)), book):
-        table.add_row(display_names[col], str(value))
+    for label, value in fields:
+        table.add_row(label, str(value) if value is not None else "")
 
     console.print(table)
 
 
-def get_books(db, year):
+def get_books_by_year(db, year):
     try:
         cursor = db.cursor()
         cursor.execute(
             """
-            SELECT b.id, b.title, b.author, b.genre, r.rating, r.date_read
+            SELECT b.id, b.title, b.author, b.genre, r.rating, r.date_read, r.status
             FROM books b
             LEFT JOIN reviews r ON b.id = r.book_id
-            WHERE strftime('%Y', r.date_read) = ?
+            WHERE strftime('%Y', r.date_read) = ? AND r.status = 'finished'
             ORDER BY r.date_read ASC
         """,
             (str(year),),
         )
-        books = cursor.fetchall()
-        return books
+        return cursor.fetchall()
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return None
-    except Exception as e:
-        print(f"Error: {e}")
+
+
+def get_books_by_status(db, status):
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT b.id, b.title, b.author, b.genre, r.rating, r.date_read, r.status
+            FROM books b
+            LEFT JOIN reviews r ON b.id = r.book_id
+            WHERE r.status = ?
+            ORDER BY r.date_read ASC
+        """,
+            (status,),
+        )
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return None
+
+
+def get_all_books(db):
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT b.id, b.title, b.author, b.genre, r.rating, r.date_read, r.status
+            FROM books b
+            LEFT JOIN reviews r ON b.id = r.book_id
+            ORDER BY r.status, r.date_read ASC
+        """
+        )
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
         return None

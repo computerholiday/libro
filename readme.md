@@ -6,9 +6,21 @@
 
 Add new book: `libro add`
 
-Show books read by year: `libro show --year 2024`
+Show all books: `libro show`
+
+Show currently reading: `libro show --list current`
+
+Show want to read: `libro show --list want`
+
+Show finished books by year: `libro show --list finished --year 2024`
 
 Show book details by id: `libro show 123`
+
+Edit book review: `libro edit 123`
+
+Add reading note: `libro note add 123`
+
+Show reading notes: `libro note show 123`
 
 Show books read by year: `libro report`
 

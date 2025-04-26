@@ -8,6 +8,8 @@ from libro.actions.report import report
 from libro.actions.add import add_book
 from libro.actions.db import init_db
 from libro.actions.importer import import_books
+from libro.actions.edit import edit_book
+from libro.actions.notes import add_note, show_notes
 
 
 def main():
@@ -46,6 +48,15 @@ def main():
             report(db, args)
         elif command == "import":
             import_books(db, args)
+        elif command == "edit":
+            edit_book(db, args)
+        elif command == "note":
+            if args["note_command"] == "add":
+                add_note(db, args)
+            elif args["note_command"] == "show":
+                show_notes(db, args)
+            else:
+                print("Unknown note command")
         else:
             print("Not yet implemented")
 
